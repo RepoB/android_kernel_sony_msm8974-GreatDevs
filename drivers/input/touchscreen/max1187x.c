@@ -1,5 +1,10 @@
 /* drivers/input/touchscreen/max1187x.c
  *
+ * Copyright (c) 2014 Charles Fryett - BlueEther
+ * Double Tap to Wake.
+ * Ideas and sysfs code from bricked-hammerhead (c) showp1984
+ * Thanks to reaper61616 for the first port.
+ *  
  * Copyright (c)2013 Maxim Integrated Products, Inc.
  * Copyright (C) 2012-2014 Sony Mobile Communications AB.
  *
@@ -42,6 +47,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <asm-generic/cputime.h>
 
 #define NWORDS(a)    (sizeof(a) / sizeof(u16))
 #define BYTE_SIZE(a) ((a) * sizeof(u16))
@@ -201,7 +207,11 @@ enum maxim_report_id {
 };
 
 enum maxim_power_mode {
+#ifdef MXM_TOUCH_WAKEUP_FEATURE
+	MXM_PWR_SLEEP_MODE  = 0x0001,
+#else
 	MXM_PWR_SLEEP_MODE  = 0x0000,
+#endif
 	MXM_ACTIVE_MODE     = 0x0002,
 	MXM_WAKEUP_MODE     = 0x0006,
 };
@@ -315,6 +325,16 @@ struct data {
 	u16 button3:1;
 };
 
+#ifdef MXM_TOUCH_WAKEUP_FEATURE
+#define DT2W_DEFAULT_MODE	1
+#define DT2W_COUNT		2
+#define DT2W_DEFAULT_TIME	700
+int touch_no = 0;
+int dt2w_active = DT2W_DEFAULT_MODE;
+int dt2w_time = DT2W_DEFAULT_TIME;
+cputime64_t dt2w_tap_time = 0;
+#endif
+
 #ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data);
@@ -426,6 +446,7 @@ static int i2c_tx_words(struct data *ts, u16 *buf, u16 len)
 		ret = i2c_master_send(ts->client,
 			(char *) buf, (int) (len * MXM_BYTES_LEN_IN_WORDS));
 	} while (ret == -EAGAIN);
+	
 	if (ret < 0) {
 		dev_err(dev, "I2C TX fail (%d)", ret);
 		return ret;
@@ -797,17 +818,14 @@ static void report_wakeup_gesture(struct data *ts,
 				  struct max1187x_touch_report_header *header)
 {
 	struct device *dev = &ts->client->dev;
-	u16 code = header->touch_count | (header->reserved0 << 4);
-
-	dev_dbg(dev, "event: Received gesture: (0x%04X)\n", code);
-	if (code == MXM_PWR_DATA_WAKEUP_GEST) {
-		dev_dbg(dev, "event: Received touch wakeup report\n");
-		if (ts->input_dev_key->users) {
-			input_report_key(ts->input_dev_key, KEY_POWER, 1);
-			input_sync(ts->input_dev_key);
-			input_report_key(ts->input_dev_key, KEY_POWER, 0);
-			input_sync(ts->input_dev_key);
-		}
+	
+	dev_dbg(dev, "event: Received dt2w wakeup report\n");
+	if (ts->input_dev_key->users) {
+		input_report_key(ts->input_dev_key, KEY_POWER, 1);
+		input_sync(ts->input_dev_key);
+		input_report_key(ts->input_dev_key, KEY_POWER, 0);
+		input_sync(ts->input_dev_key);
+		
 	}
 }
 #endif
@@ -825,11 +843,30 @@ static void process_report(struct data *ts, u16 *buf)
 		goto end;
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (header->report_id == MXM_RPT_ID_POWER_MODE
-	    && device_may_wakeup(dev) && ts->is_suspended) {
-		report_wakeup_gesture(ts, header);
-		goto end;
-	}
+	if (dt2w_active == 1  && ts->is_suspended && header->touch_count >= DT2W_COUNT) {
+//	  input_mt_slot(ts->input_dev, i);
+	  report_wakeup_gesture(ts, header);
+	  
+// 		if(header->touch_count >= DT2W_COUNT) {
+// 			report_wakeup_gesture(ts, header);
+// 			goto end;
+// 		}
+// 		if (header->touch_count == 1 && dt2w_tap_time > 0 ) {
+// 			if ((ktime_to_ms(ktime_get()) - dt2w_tap_time) < dt2w_time) {
+// 				touch_no = 0;
+// 				report_wakeup_gesture(ts, header);
+// 				goto end;
+// 			}
+// 			dt2w_tap_time = ktime_to_ms(ktime_get());
+// 			goto end;
+// 		}
+// 		if (header->touch_count == 1 && dt2w_tap_time == 0) {	
+// 			dt2w_tap_time = ktime_to_ms(ktime_get());
+// 			goto end;
+// 		}
+// 	
+ 		goto end;
+ 	}
 #endif
 	if (header->report_id != MXM_RPT_ID_EXT_TOUCH_INFO)
 		goto end;
@@ -2499,7 +2536,7 @@ static void set_suspend_mode(struct data *ts)
 	ts->is_suspended = true;
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (device_may_wakeup(&ts->client->dev))
+	if (&ts->is_suspended)
 		cmd_buf[2] = MXM_WAKEUP_MODE;
 #endif
 	ret = cmd_send(ts, cmd_buf, 3);
@@ -2512,7 +2549,7 @@ static void set_suspend_mode(struct data *ts)
 	}
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (device_may_wakeup(&ts->client->dev))
+	if (&ts->is_suspended)
 		enable_irq(ts->client->irq);
 #endif
 
@@ -2533,7 +2570,7 @@ static void set_resume_mode(struct data *ts)
 	usleep_range(MXM_WAIT_MIN_US, MXM_WAIT_MAX_US);
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (device_may_wakeup(&ts->client->dev))
+	if (&ts->is_suspended)
 		disable_irq(ts->client->irq);
 #endif
 
@@ -2615,7 +2652,7 @@ static int suspend(struct device *dev)
 #endif
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (device_may_wakeup(&client->dev))
+	if (&ts->is_suspended)
 		enable_irq_wake(client->irq);
 #endif
 
@@ -2632,7 +2669,7 @@ static int resume(struct device *dev)
 	dev_dbg(&ts->client->dev, "%s: Enter\n", __func__);
 
 #ifdef MXM_TOUCH_WAKEUP_FEATURE
-	if (device_may_wakeup(&client->dev))
+	if (&ts->is_suspended)
 		disable_irq_wake(client->irq);
 #endif
 
