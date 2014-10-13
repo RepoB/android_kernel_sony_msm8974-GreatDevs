@@ -456,12 +456,13 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 	
 #ifdef CONFIG_CPU_OC
 #ifdef CONFIG_CPU_OC_ULTIMATE
-    *speed = 3;
-    dev_info(&pdev->dev, "Androguide: Forcing CPU OC ULTIMATE!\n");
+    *speed = 1;
+    dev_info(&pdev->dev, "GreatDevs: Forcing CPU OC ULTIMATE!\n");
 #else
 	*speed = 1;
-    dev_info(&pdev->dev, "Androguide: Forcing CPU OC!\n");
+    dev_info(&pdev->dev, "GreatDevs: Forcing CPU OC!\n");
 #endif
+    dev_info(&pdev->dev, "CPU OC: Speed bin: %d\n", *speed);
 #endif
 
 	/* Check SPEED_BIN_BLOW_STATUS */
