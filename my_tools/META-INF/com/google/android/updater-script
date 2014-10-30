@@ -1,11 +1,9 @@
 ui_print(" ");
-assert(getprop("ro.product.device") == "D5503" || getprop("ro.build.product") == "D5503" || 
-       getprop("ro.product.device") == "amami" || getprop("ro.build.product") == "amami" || abort("This package is for \"D5503,amami\" devices; this is a \"" + getprop("ro.product.device") + "\"."););
-ui_print("Welcome to Pimped Kernel The Full Version");
-ui_print("   Device: Xperia Z1 Compact aka Amami");
+ui_print("Welcome to GreatDevs Kernel");
+ui_print(" Device: Xperia Z1 Compact");
 ui_print(" ");
 ui_print("Copying tools & setting perms...");
-package_extract_dir("kernel", "/tmp");
+package_extract_dir("GD", "/tmp");
 set_perm(0, 0, 0777, "/tmp/mkbootimg.sh");
 set_perm(0, 0, 0777, "/tmp/mkbootimg");
 set_perm(0, 0, 0777, "/tmp/unpackbootimg");
