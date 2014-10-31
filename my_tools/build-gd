@@ -6,6 +6,7 @@ CYAN="\\033[1;36m"
 GREEN="\\033[1;32m"
 RED="\\033[1;31m"
 RESET="\\e[0m"
+VERSION="1"
 
 set -e
 
@@ -24,6 +25,7 @@ rm -rf toolchain arch/arm/boot/zImage-dtb
 unzip -q ~/toolchain.zip -d toolchain
 ARCH=arm CROSS_COMPILE=toolchain/bin/arm-eabi- make distclean
 export KBUILD_BUILD_USER=GreatDevs
+export KBUILD_BUILD_VERSION=${VERSION}
 ARCH=arm CROSS_COMPILE=toolchain/bin/arm-eabi- make gd_${DEVICE}_defconfig
 ARCH=arm CROSS_COMPILE=toolchain/bin/arm-eabi- make -j16
 if [ -f arch/arm/boot/zImage ]
@@ -35,12 +37,12 @@ mkdir modules
 find .. -name '*.ko' -exec cp {} modules \;
 ../toolchain/bin/arm-eabi-strip --strip-unneeded modules/*
 zip -r K META-INF modules GD
-java -Xmx1024m -jar signapk.jar -w META-INF/com/android/otacert testkey.pk8 K.zip ~/Desktop/GreatDevs-Kernel-${DATE}-${DEVICE}.zip
+java -Xmx1024m -jar signapk.jar -w META-INF/com/android/otacert testkey.pk8 K.zip ~/Desktop/GreatDevs-Kernel-V${VERSION}_${DATE}_${DEVICE}.zip
 rm -rf K.zip GD/zImage GD/dt.img modules
 cd ..
 ARCH=arm CROSS_COMPILE=toolchain/bin/arm-eabi- make distclean
 rm -rf toolchain arch/arm/boot/zImage-dtb
-echo -e "\n\n${GREEN}DONE!\n\n\nGreatDevs Kernel Build ${DATE} For ${DEVICE} Is Ready ^_^${RESET}\n\n"
+echo -e "\n\n${GREEN}DONE!\n\n\nGreatDevs Kernel V${VERSION} Build ${DATE} For ${DEVICE} Is Ready ^_^${RESET}\n\n"
 else 
-echo -e "\n\n${RED}Failed To build GreatDevs Kernel For ${DEVICE}!!!!${RESET}\n\n"
+echo -e "\n\n${RED}Failed To build GreatDevs Kernel V${VERSION} For ${DEVICE}!!!!${RESET}\n\n"
 fi
