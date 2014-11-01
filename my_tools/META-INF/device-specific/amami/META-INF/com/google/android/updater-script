@@ -1,3 +1,6 @@
+assert(getprop("ro.product.device") == "D5503" || getprop("ro.build.product") == "D5503" ||
+	getprop("ro.product.device") == "amami" || getprop("ro.build.product") == "amami" ||
+	abort("This Package Is For Device: D5503,amami; This Device Is " + getprop("ro.product.device") + "."););
 ui_print(" ");
 ui_print("Welcome to GreatDevs Kernel");
 ui_print(" Device: Xperia Z1 Compact");
