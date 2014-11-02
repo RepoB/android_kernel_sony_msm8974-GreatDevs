@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  *
  */
+#include <linux/earlysuspend.h>
 #include <linux/workqueue.h>
 #include <linux/cpu.h>
 #include <linux/sched.h>
@@ -21,10 +22,6 @@
 #include <linux/rq_stats.h>
 #include <linux/slab.h>
 #include <linux/input.h>
-
-#if CONFIG_POWERSUSPEND
-#include <linux/powersuspend.h>
-#endif
 
 //#define DEBUG_INTELLI_PLUG
 #undef DEBUG_INTELLI_PLUG
@@ -55,9 +52,6 @@ module_param(intelli_plug_active, uint, 0644);
 static unsigned int eco_mode_active = 0;
 module_param(eco_mode_active, uint, 0644);
 
-static unsigned int eco_cores_enabled = 2;
-module_param(eco_cores_enabled, uint, 0644);
-
 static unsigned int sampling_time = 0;
 
 static unsigned int persist_count = 0;
@@ -70,24 +64,14 @@ static unsigned int nr_fshift = NR_FSHIFT;
 module_param(nr_fshift, uint, 0644);
 
 static unsigned int nr_run_thresholds_full[] = {
-/*	1,  2,  3,  4 - on-line cpus target */
+/* 	1,  2,  3,  4 - on-line cpus target */
 	5,  7,  9,  UINT_MAX /* avg run threads * 2 (e.g., 9 = 2.25 threads) */
 	};
-
-static unsigned int nr_run_thresholds_eco_minimal[] = {
-/*      1,  2, - on-line cpus target */
-        3,  5,  UINT_MAX /* avg run threads * 2 (e.g., 9 = 2.25 threads) */
-        };
 
 static unsigned int nr_run_thresholds_eco[] = {
 /*      1,  2, - on-line cpus target */
         3,  UINT_MAX /* avg run threads * 2 (e.g., 9 = 2.25 threads) */
         };
-
-static unsigned int nr_run_thresholds_eco_extreme[] = {
-/*	   1, - on-line cpus target */
-	UINT_MAX /* avg run threads *2 (e.g., 9 = 2.25 threads) */
-	};
 
 static unsigned int nr_run_hysteresis = 4;  /* 0.5 thread */
 module_param(nr_run_hysteresis, uint, 0644);
@@ -157,25 +141,6 @@ static unsigned int calculate_thread_stats(void)
 		pr_info("intelliplug: full mode active!");
 #endif
 	}
-
-	if (eco_cores_enabled == 3) {
-		threshold_size =  ARRAY_SIZE(nr_run_thresholds_eco_minimal);
-                nr_run_hysteresis = 6;
-                nr_fshift = 2;
-#ifdef DEBUG_INTELLI_PLUG
-                pr_info("intelliplug: eco-minimal mode active!");
-#endif
-        }
-
-	if (eco_cores_enabled == 1) {
-		threshold_size =  ARRAY_SIZE(nr_run_thresholds_eco_extreme);
-                nr_run_hysteresis = 2;
-                nr_fshift = 1;
-#ifdef DEBUG_INTELLI_PLUG
-                pr_info("intelliplug: eco-extreme mode active!");
-#endif
-        }
-
 	else {
 		threshold_size =  ARRAY_SIZE(nr_run_thresholds_eco);
 		nr_run_hysteresis = 4;
@@ -189,10 +154,6 @@ static unsigned int calculate_thread_stats(void)
 		unsigned int nr_threshold;
 		if (!eco_mode_active)
 			nr_threshold = nr_run_thresholds_full[nr_run - 1];
-		if (eco_cores_enabled == 3)
-			nr_threshold = nr_run_thresholds_eco_minimal[nr_run - 1];
-		if (eco_cores_enabled == 1)
-			nr_threshold = nr_run_thresholds_eco_extreme[nr_run - 1];
 		else
 			nr_threshold = nr_run_thresholds_eco[nr_run - 1];
 
@@ -325,8 +286,8 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 		msecs_to_jiffies(sampling_time));
 }
 
-#ifdef CONFIG_POWERSUSPEND
-static void intelli_plug_suspend(struct power_suspend *handler)
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void intelli_plug_early_suspend(struct early_suspend *handler)
 {
 	int i;
 	int num_of_active_cores = 4;
@@ -343,7 +304,7 @@ static void intelli_plug_suspend(struct power_suspend *handler)
 	}
 }
 
-static void __cpuinit intelli_plug_resume(struct power_suspend *handler)
+static void __cpuinit intelli_plug_late_resume(struct early_suspend *handler)
 {
 	int num_of_active_cores;
 	int i;
@@ -368,11 +329,12 @@ static void __cpuinit intelli_plug_resume(struct power_suspend *handler)
 		msecs_to_jiffies(10));
 }
 
-static struct power_suspend intelli_plug_power_suspend_driver = {
-	.suspend = intelli_plug_suspend,
-	.resume = intelli_plug_resume,
+static struct early_suspend intelli_plug_early_suspend_struct_driver = {
+	.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 10,
+	.suspend = intelli_plug_early_suspend,
+	.resume = intelli_plug_late_resume,
 };
-#endif  /* CONFIG_POWERSUSPEND */
+#endif	/* CONFIG_HAS_EARLYSUSPEND */
 
 static void intelli_plug_input_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
@@ -386,8 +348,8 @@ static void intelli_plug_input_event(struct input_handle *handle,
 	sampling_time = BUSY_SAMPLING_MS;
 	busy_persist_count = BUSY_PERSISTENCE;
 
-        schedule_delayed_work_on(0, &intelli_plug_work,
-                msecs_to_jiffies(sampling_time));
+	schedule_delayed_work_on(0, &intelli_plug_work,
+		msecs_to_jiffies(sampling_time));
 }
 
 static int input_dev_filter(const char *input_dev_name)
@@ -471,14 +433,13 @@ int __init intelli_plug_init(void)
 	sampling_time = DEF_SAMPLING_MS;
 
 	rc = input_register_handler(&intelli_plug_input_handler);
-#ifdef CONFIG_POWERSUSPEND
-	register_power_suspend(&intelli_plug_power_suspend_driver);
-#endif
-
 	INIT_DELAYED_WORK(&intelli_plug_work, intelli_plug_work_fn);
 	schedule_delayed_work_on(0, &intelli_plug_work,
 		msecs_to_jiffies(sampling_time));
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	register_early_suspend(&intelli_plug_early_suspend_struct_driver);
+#endif
 	return 0;
 }
 
