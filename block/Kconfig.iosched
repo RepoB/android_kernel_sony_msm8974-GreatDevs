@@ -82,6 +82,13 @@ config IOSCHED_FIOPS
 	  IOPS equally among all processes in the system. It's mainly for
 	  Flash based storage.
 
+config IOSCHED_ZEN
+	tristate "Zen I/O scheduler"
+	default y
+	---help---
+	  FCFS, dispatches are back-inserted, deadlines ensure fairness.
+	  Should work best with devices where there is no travel delay.
+
 config IOSCHED_VR
 	tristate "VR I/O Scheduler"
 	default y
@@ -155,6 +162,9 @@ choice
 	config DEFAULT_TRIPNDROID
 		bool "TRIPNDROID" if IOSCHED_TRIPNDROID=y
 
+	config DEFAULT_ZEN
+		bool "ZEN" if IOSCHED_ZEN=y
+
 endchoice
 
 config DEFAULT_IOSCHED
@@ -167,6 +177,7 @@ config DEFAULT_IOSCHED
 	default "sio" if DEFAULT_SIO
 	default "fiops" if DEFAULT_FIOPS
 	default "tripndroid" if DEFAULT_TRIPNDROID
+	default "zen" if DEFAULT_ZEN
 
 endmenu
 
