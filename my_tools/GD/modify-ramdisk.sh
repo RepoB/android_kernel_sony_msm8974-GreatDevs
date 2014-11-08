@@ -6,6 +6,9 @@ cd /tmp/ramdisk
 gunzip -c ../boot.img-ramdisk.gz | cpio -i
 rm ../boot.img-ramdisk.gz
 
+# changing logo
+cp ../logo.rle .
+
 # unpack ramdisk
 mkdir sbin/ramdisk
 cd sbin/ramdisk
