@@ -1,4 +1,4 @@
-if BLOCK
+`	if BLOCK
 
 menu "IO Schedulers"
 
@@ -165,6 +165,9 @@ choice
 	config DEFAULT_ZEN
 		bool "ZEN" if IOSCHED_ZEN=y
 
+	config DEFAULT_VR
+		bool "VR" if IOSCHED_VR=y
+
 endchoice
 
 config DEFAULT_IOSCHED
@@ -178,6 +181,7 @@ config DEFAULT_IOSCHED
 	default "fiops" if DEFAULT_FIOPS
 	default "tripndroid" if DEFAULT_TRIPNDROID
 	default "zen" if DEFAULT_ZEN
+	default "vr" if DEFAULT_VR
 
 endmenu
 
